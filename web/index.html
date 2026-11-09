@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#19392d" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <title>AI Job Hunter — Your next move</title>
+    <style>
+      html { background: #f7f8f5; color: #26372e; color-scheme: light; }
+      html[data-theme="dark"] { background: #18221d; color: #e5ede2; color-scheme: dark; }
+    </style>
+    <script>
+      // Resolve before the page paints so a saved dark theme never flashes light.
+      let savedTheme;
+      try { savedTheme = localStorage.getItem('hunter-theme'); } catch { /* Storage may be disabled. */ }
+      document.documentElement.dataset.theme = savedTheme === 'dark' || savedTheme === 'light'
+        ? savedTheme
+        : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
