@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync,mkdirSync,mkdtempSync,rmSync} from 'node:fs';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {join,dirname} from 'node:path';
+import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+
+const root=dirname(dirname(fileURLToPath(import.meta.url)));
+const cache=join(root,'node_modules','.cache');mkdirSync(cache,{recursive:true});
+const temporary=mkdtempSync(join(cache,'select-check-'));
+try {
+ const source=readFileSync(join(root,'src/components/Select.tsx'),'utf8');
+ const compiled=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
+ const target=join(temporary,'Select.mjs');writeFileSync(target,compiled);
+ const {default:Select,nextOption,revealOption}=await import(pathToFileURL(target).href);
+ const options=[{value:'',label:'Choose',disabled:true},{value:'remote',label:'Remote'},{value:'onsite',label:'On-site',disabled:true},{value:'hybrid',label:'Hybrid'}];
+ assert.equal(nextOption(options,1,1),3,'arrow navigation skips disabled options');
+ assert.equal(nextOption(options,3,1),1,'arrow navigation wraps');
+ assert.equal(nextOption(options,1,-1),3,'reverse navigation wraps and skips disabled');
+ assert.equal(nextOption(options,-1,1),1,'Home finds first enabled option');
+ assert.equal(nextOption(options,0,-1),3,'End finds last enabled option');
+ assert.equal(nextOption([{value:'x',label:'X',disabled:true}],0,1),-1);
+ assert.equal(nextOption([],0,1),-1);
+ const list={scrollTop:60,clientTop:1,clientHeight:100,getBoundingClientRect:()=>({top:100})};
+ const option=(top,bottom)=>({getBoundingClientRect:()=>({top,bottom})});
+ revealOption(list,option(120,150));assert.equal(list.scrollTop,60,'opening with a visible option must not scroll');
+ revealOption(list,option(190,230));assert.equal(list.scrollTop,89,'navigation scrolls only the menu down');
+ revealOption(list,option(80,110));assert.equal(list.scrollTop,68,'navigation scrolls only the menu up');
+ assert.doesNotMatch(source,/\.scrollIntoView\s*\(/,'options must never scroll ancestor containers');
+ const render=props=>renderToStaticMarkup(React.createElement(Select,{'aria-label':'Working arrangement',options,...props}));
+ const controlled=render({value:'hybrid',name:'arrangement'});
+ assert.match(controlled,/role="combobox"/);
+ assert.match(controlled,/aria-expanded="false"/);
+ assert.match(controlled,/aria-label="Working arrangement"/);
+ assert.match(controlled,/name="arrangement"[^>]*value="hybrid"/);
+ assert.match(controlled,/>Hybrid<\/span>/);
+ assert.doesNotMatch(controlled,/<select\b|<option\b/,'browser selects must not render');
+ const named=render({options:[{value:'greenhouse',label:'Greenhouse'},{value:'lever',label:'Lever'}],name:'provider'});
+ assert.match(named,/name="provider"[^>]*value="greenhouse"/,'uncontrolled forms retain the default provider');
+ assert.match(render({options:[{value:0,label:'Zero'},{value:2048,label:'2048 tokens'}],value:0}),/>Zero<\/span>/);
+ assert.match(render({disabled:true}),/disabled=""/);
+ assert.match(render({defaultValue:'remote'}),/>Remote<\/span>/);
+ console.log('Custom select checks passed: keyboard navigation, disabled options, accessible trigger, controlled/default values and form fields.');
+} finally {rmSync(temporary,{recursive:true,force:true})}
