@@ -2,6 +2,27 @@
 
 A free, local-first job intelligence MVP for macOS Apple Silicon. Go + Chi + GORM + PostgreSQL, with a React/TypeScript dashboard. Optional native Ollama (`qwen3:1.7b`) adds explanations. Deterministic matching, discovery, evidence and application tracking work without AI. No cloud AI requests, subscriptions, paid APIs, vector databases, or model downloads at startup.
 
+## Features
+
+- Discover jobs from Greenhouse, Lever and Himalayas, preserving source links and availability history.
+- Personalise matches from an editable profile or a locally analysed CV upload.
+- Filter by working arrangement, hiring location, salary preferences and company exclusions.
+- Explain deterministic ranking scores and show how much evidence supports them.
+- Track saved and submitted applications; hide applied jobs from default results.
+- Record sourced company facts and interpret configured public research with optional local AI.
+- Convert advertised working hours into the time zone derived from your profile location.
+- Use light/dark themes, custom keyboard-accessible dropdowns and save notifications.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Optional native Ollama](#optional-native-ollama)
+- [Matching and ranking](#matching-and-ranking)
+- [Company intelligence](#company-intelligence)
+- [Tests and build](#tests-and-build)
+- [Troubleshooting and limits](#troubleshooting-and-limits)
+- [Project layout](#project-layout)
+
 ## Quick start
 
 Prerequisites: Go **1.24.6+**, Node **22+**, and PostgreSQL **17+** (Postgres.app, Homebrew, or Docker). PostgreSQL and Ollama run natively when possible to conserve memory. Docker Compose contains PostgreSQL only.
@@ -131,6 +152,7 @@ Administrative mutations require a token and are capped at 30 requests/minute in
 ```sh
 make test                 # unit + mocked providers/AI, no credentials or Ollama
 make build                # Go binaries + TypeScript + production frontend
+npm --prefix web run test:select  # custom dropdown regression checks
 createdb jobhunter_test   # on your chosen PostgreSQL instance
 # Add TEST_DATABASE_URL for this isolated DB to .env, then:
 make test-integration
@@ -158,7 +180,7 @@ Known MVP limits: no scanned résumé OCR, global search-engine integration, aut
 
 Settings has three tabs: **Professional profile**, **Job preferences**, and **Target companies & sources**. In Professional profile, use **Upload and personalise** to upload a text-based PDF or UTF-8 TXT CV (up to 5 MB). Analysis runs automatically in the existing background queue using your installed local Ollama model. Local AI must be enabled in both server configuration and Job preferences. No model is downloaded.
 
-PDF extraction requires `pdftotext` from Poppler (`brew install poppler` on macOS); TXT uploads need no extra dependency. Scanned PDFs need an OCR/text export first. Extracted text must contain at least 20 words and fit within 200,000 bytes. Long CVs use bounded beginning/end excerpts and show a truncation note. The database stores extracted text with contact email addresses, phone numbers, and HTTP URLs redacted, plus the extraction result, filename, fingerprint, model and prompt version. Uploaded files are not retained, and CV text is never sent to job providers or cloud AI. The supplied CV PDF and local database are ignored by Git.
+PDF extraction requires `pdftotext` from Poppler (`brew install poppler` on macOS); TXT uploads need no extra dependency. Scanned PDFs need an OCR/text export first. Extracted text must contain at least 20 words and fit within 200,000 bytes. Long CVs use bounded beginning/end excerpts and show a truncation note. The database stores extracted text with contact email addresses, phone numbers, and HTTP URLs redacted, plus the extraction result, filename, fingerprint, model and prompt version. Uploaded files are not retained, and CV text is never sent to job providers or cloud AI. The local database is stored under ignored `.local/` when using the native helper. Keep original CV documents outside tracked project files.
 
 A successful analysis replaces the professional summary and supported skills. Name, location and years of experience update only when explicitly supported by the CV; unknown fields retain their previous values. Job preferences, including nearby offices and working arrangements, stay unchanged. Profile updates and normalized skills are saved together. The newest upload takes priority, and manual profile edits made during analysis prevent an overwrite. Invalid or failed analysis retains the current profile; fix the reported issue and upload again. Unchanged CV text reuses its analysis when the model, context and prompt version match.
 
@@ -168,7 +190,7 @@ Settings supports nearby office areas, hard location exclusions, and **Show only
 
 When strict location confirmation is enabled, unknown location/arrangement data is held outside the default shortlist without being marked as a confirmed mismatch. **Include excluded or unconfirmed roles** in the explorer reveals these records and their reasons. Eligibility is applied before pagination and matching totals. Discovery retains source records for auditing; distant jobs are not automatically marked closed. Direct job details and application history remain available.
 
-For this profile, remote and hybrid arrangements are allowed, hiring country is Indonesia, and nearby office areas cover Jabodetabek (including Tangerang Selatan). These choices are editable in Settings. On-site jobs are excluded by the working arrangement rule. The Job Explorer defaults to highest deterministic match, prioritising preferred role titles and known technical compatibility before ranking scores. Explicitly required technologies such as Ruby/Rails that are absent from the profile lower technical compatibility rather than being overlooked. Headline discovered count includes all stored source jobs; new opportunities and recommendations use the current shortlist.
+Configure working arrangements, eligible hiring countries and nearby office areas in Job preferences. These settings control which listings appear in the default shortlist. The Job Explorer defaults to highest deterministic match, prioritising preferred role titles and known technical compatibility before ranking scores. Recognised technologies that are absent from the profile lower technical compatibility. Headline discovered count includes all stored source jobs; new opportunities and recommendations use the current shortlist.
 
 Himalayas sources can additionally set a two-letter hiring country, for example `ID`. This is forwarded as the public API's `country` query parameter so discovery can target Indonesia and worldwide roles. Each keyword/country combination is tracked separately and retains its daily refresh limit. The company source form and `POST /api/companies` accept this optional `country`; leave it blank for Greenhouse/Lever.
 
@@ -191,7 +213,7 @@ Applied, Screening, Interview, Offer, Rejected and Withdrawn jobs are hidden fro
 
 ## Working hours in your time zone
 
-Your display time zone is derived from your saved CV/profile location. Tangerang Selatan/Jabodetabek resolves to `Asia/Jakarta` (WIB, GMT+7). CV updates and saved location edits automatically refresh it. Known Indonesian cities resolve to Jakarta, Makassar or Jayapura time; explicit IANA zone names are also supported. Country-only, conflicting or unsupported locations remain unknown rather than defaulting to Jakarta. Settings shows the resolved zone.
+Your display time zone is derived from your saved CV/profile location. CV updates and saved location edits automatically refresh it. Known Indonesian cities resolve to Jakarta, Makassar or Jayapura time; explicit IANA zone names are also supported. Country-only, conflicting or unsupported locations remain unknown rather than defaulting to Jakarta. Settings shows the resolved zone.
 
 Job cards and details show conversions into your resolved time zone for posting time windows with explicit UTC/GMT offsets, common fixed abbreviations (CET/CEST, EST/EDT, PST/PDT), or IANA zones. Overnight windows show the date change. A stated window may describe overlap rather than a complete shift; its excerpt appears in job details.
 
@@ -203,3 +225,25 @@ When only a time zone is mentioned, the UI labels 09:00–17:00 conversions as h
 Click **Exclude company** on a job card to add that employer to Settings → Job preferences → Excluded companies. All its jobs disappear from default results, and a top-right notification confirms the change. Application history is preserved. To undo, remove the name from Excluded companies and save preferences. The explorer's **Include excluded or unconfirmed roles** option can still show these jobs with a Company excluded label. This is your personal exclusion, not a verified finding about the company's legitimacy.
 
 The authenticated `POST /api/companies/{id}/exclude` endpoint updates only company exclusions, deduplicates names case-insensitively, and serializes concurrent updates. Existing preference limits apply.
+
+
+## Project layout
+
+```text
+cmd/                  API, worker and migration entry points
+internal/config/      Environment configuration and validation
+internal/domain/      Models, eligibility, weighted ranking and time zones
+internal/matching/    Technology matching and CV grounding
+internal/provider/    Job boards, local Ollama, CV extraction and research feeds
+internal/repository/  PostgreSQL persistence and queue operations
+internal/usecase/     Discovery, shortlisting and analysis workflows
+internal/transport/   Authenticated HTTP API
+internal/worker/      Scheduling and background analysis
+migrations/           Embedded SQL migrations
+scripts/              Native PostgreSQL helper
+web/src/              React dashboard and shared UI components
+web/scripts/          Frontend regression checks
+.github/              Pull request template
+```
+
+Configuration starts from [.env.example](.env.example). Development commands are in the [Makefile](Makefile). Read [AGENTS.md](AGENTS.md) for project guardrails and use the [pull request template](.github/pull_request_template.md) when proposing changes. Never include credentials, personal CV contents or local database files in a pull request.
